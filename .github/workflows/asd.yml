@@ -1,0 +1,119 @@
+name: Windows RDP Fixed
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    
+    steps:
+    - name: RDP Setup ve Ngrok
+      run: |
+        # RDP'yi aç
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        
+        # Kullanıcı oluştur
+        $password = "RDP2024!"
+        net user rdpuser "$password" /add /Y
+        net localgroup administrators rdpuser /add
+        
+        # Ngrok'u indir
+        Write-Host "Ngrok indiriliyor..." -ForegroundColor Yellow
+        Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Expand-Archive ngrok.zip -Force
+        
+        # Ngrok'u başlat
+        Write-Host "Ngrok başlatılıyor..." -ForegroundColor Yellow
+        Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+        
+        # Ngrok'un başlaması için bekle
+        Write-Host "Tunnel oluşturuluyor..." -ForegroundColor Yellow
+        $retries = 0
+        $maxRetries = 10
+        $tunnel = $null
+        
+        while ($retries -lt $maxRetries -and -not $tunnel) {
+            Start-Sleep -Seconds 3
+            try {
+                $response = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels -ErrorAction Stop
+                if ($response.tunnels.Count -gt 0) {
+                    $tunnel = $response.tunnels[0].public_url -replace "tcp://", ""
+                    break
+                }
+            } catch {
+                $retries++
+                Write-Host "Deneme $retries/$maxRetries..." -ForegroundColor Gray
+            }
+        }
+        
+        if ($tunnel) {
+            Clear-Host
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Green
+            Write-Host "   WINDOWS RDP HAZIR!" -ForegroundColor Yellow  
+            Write-Host "========================================" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "REMMINA BAĞLANTI BİLGİLERİ:" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "Sunucu: $tunnel" -ForegroundColor White -BackgroundColor DarkBlue
+            Write-Host "Kullanıcı: rdpuser" -ForegroundColor White -BackgroundColor DarkBlue
+            Write-Host "Şifre: $password" -ForegroundColor White -BackgroundColor DarkBlue
+            Write-Host ""
+            Write-Host "----------------------------------------" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "HIZLI BAĞLANTI (kopyala/yapıştır):" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "remmina -c rdp://rdpuser:$password@$tunnel" -ForegroundColor Yellow -BackgroundColor DarkGray
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Green
+            Write-Host ""
+            
+            # Bilgileri dosyaya da kaydet
+            @"
+RDP Connection Info:
+Server: $tunnel
+Username: rdpuser
+Password: $password
+Command: remmina -c rdp://rdpuser:$password@$tunnel
+"@ | Out-File -FilePath rdp_info.txt
+            
+        } else {
+            Write-Host "HATA: Ngrok tunnel oluşturulamadı!" -ForegroundColor Red
+            Write-Host "Manuel kontrol için:" -ForegroundColor Yellow
+            Write-Host "1. Başka bir workflow deneyin" -ForegroundColor White
+            Write-Host "2. Veya aşağıdaki alternatifi kullanın" -ForegroundColor White
+        }
+        
+    - name: Alternatif Yöntem (Hata durumunda)
+      if: failure()
+      run: |
+        Write-Host "Alternatif yöntem deneniyor..." -ForegroundColor Yellow
+        
+        # Cloudflared dene
+        Invoke-WebRequest https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
+        Start-Process -FilePath ".\cloudflared.exe" -ArgumentList "tunnel --url tcp://localhost:3389 --no-autoupdate" -WindowStyle Hidden
+        
+        Start-Sleep -Seconds 10
+        Write-Host "Cloudflare tunnel başlatıldı. Logları kontrol edin." -ForegroundColor Green
+        
+    - name: RDP Oturumunu Açık Tut
+      run: |
+        Write-Host "`nRDP oturumu aktif...`n" -ForegroundColor Green
+        
+        # Sistem bilgisi göster
+        Write-Host "Sistem Bilgisi:" -ForegroundColor Cyan
+        Write-Host "OS: Windows Server 2022" -ForegroundColor White
+        Write-Host "CPU: $((Get-CimInstance Win32_Processor).NumberOfCores) çekirdek" -ForegroundColor White
+        Write-Host "RAM: $([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,2)) GB" -ForegroundColor White
+        Write-Host ""
+        
+        # 2 saat aktif tut
+        $end = (Get-Date).AddHours(2)
+        while ((Get-Date) -lt $end) {
+            $remaining = [math]::Round((($end - (Get-Date)).TotalMinutes))
+            Write-Host "✓ RDP Aktif - Kalan: $remaining dakika [$(Get-Date -Format 'HH:mm:ss')]" -ForegroundColor Green
+            Start-Sleep -Seconds 300
+        }
