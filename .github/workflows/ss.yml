@@ -1,0 +1,45 @@
+name: Windows Chrome Remote Desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Download Chrome Remote Desktop
+      run: |
+        # Chrome Remote Desktop Host indir
+        $url = "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi"
+        Invoke-WebRequest $url -OutFile crd.msi
+        
+        # Kur
+        Start-Process msiexec.exe -ArgumentList "/i crd.msi /quiet" -Wait
+        
+    - name: Instructions
+      run: |
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "CHROME REMOTE DESKTOP KURULUMU" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "1. Tarayıcınızda açın:" -ForegroundColor Cyan
+        Write-Host "   https://remotedesktop.google.com/headless" -ForegroundColor White
+        Write-Host ""
+        Write-Host "2. 'Set up another computer' tıklayın" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "3. Windows komutunu kopyalayın" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "4. Aşağıya yapıştırın ve Enter'a basın:" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Green
+        
+        # Kullanıcıdan komut al
+        $command = Read-Host "Chrome Remote Desktop komutunu yapıştırın"
+        
+        # Komutu çalıştır
+        Invoke-Expression $command
+        
+    - name: Keep Session
+      run: |
+        Write-Host "Chrome Remote Desktop aktif!" -ForegroundColor Green
+        Start-Sleep -Seconds 21600
