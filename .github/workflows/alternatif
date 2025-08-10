@@ -1,0 +1,47 @@
+name: Windows RDP - LocalTunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    
+    steps:
+    - name: RDP Setup
+      run: |
+        # RDP aç
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        
+        # User
+        net user admin "Pass123!" /add
+        net localgroup administrators admin /add
+        
+    - name: Install Node.js and LocalTunnel
+      run: |
+        # Node.js zaten yüklü, localtunnel kur
+        npm install -g localtunnel
+        
+    - name: Start LocalTunnel
+      run: |
+        # LocalTunnel başlat
+        Start-Job -ScriptBlock { lt --port 3389 --print-requests }
+        Start-Sleep -Seconds 5
+        
+        # URL'yi yakala
+        $job = Get-Job | Where-Object { $_.State -eq 'Running' }
+        $output = Receive-Job -Job $job
+        
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "LOCALTUNNEL RDP" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "Tunnel çıktısı:" -ForegroundColor Cyan
+        Write-Host $output -ForegroundColor White
+        Write-Host ""
+        Write-Host "User: admin" -ForegroundColor White
+        Write-Host "Pass: Pass123!" -ForegroundColor White
+        Write-Host "========================================" -ForegroundColor Green
+        
+    - name: Keep Alive
+      run: Start-Sleep -Seconds 7200
