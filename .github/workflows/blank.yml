@@ -1,0 +1,49 @@
+name: Simple Windows RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Download Files
+      run: |
+        # Gerekli dosyaları indir
+        Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Invoke-WebRequest https://raw.githubusercontent.com/Nyr/rdp-windows-github-actions/master/setup.ps1 -OutFile setup.ps1
+        
+    - name: Extract and Setup
+      run: |
+        # Extract
+        Expand-Archive ngrok.zip
+        
+        # RDP setup
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        net user runneradmin "Admin123!" /add
+        net localgroup administrators runneradmin /add
+        
+    - name: Start Tunnel
+      run: |
+        cd ngrok
+        Start-Process ngrok.exe -ArgumentList "tcp 3389" -WindowStyle Hidden
+        Start-Sleep 10
+        
+        # Get URL
+        $url = (Invoke-WebRequest -Uri http://localhost:4040/api/tunnels | ConvertFrom-Json).tunnels.public_url
+        $url = $url -replace "tcp://", ""
+        
+        Write-Host "===================="
+        Write-Host "RDP: $url"
+        Write-Host "User: runneradmin"  
+        Write-Host "Pass: Admin123!"
+        Write-Host "===================="
+        
+    - name: Keep Alive
+      run: |
+        while ($true) { 
+          Write-Host "Active..."
+          Start-Sleep 300 
+        }
